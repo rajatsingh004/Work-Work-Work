@@ -1,0 +1,14 @@
+{
+  "tags": {
+    "Environment": {
+      "tag_key": {"@@assign": "Environment"},
+      "tag_value": {"@@assign": ["development", "staging", "production"]},
+      "enforced_for": {"@@assign": ["ec2:instance", "s3:bucket"]}
+    },
+    "Component": {
+      "tag_key": {"@@assign": "Component"},
+      "tag_value": {"@@assign": "*"},
+      "enforced_for": {"@@assign": ["ec2:instance", "s3:bucket"]}
+    }
+  }
+}

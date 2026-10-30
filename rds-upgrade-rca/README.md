@@ -1,21 +1,33 @@
-# Managed Database Upgrade and RCA
+# RDS Upgrade Readiness and RCA
 
 ## Context
-A managed relational database engine upgrade is planned for a production service, with compatibility validation, controlled change, and a post-change review of any unexpected behavior.
 
-## Engineering challenge
-Upgrades can change query plans, extensions, connection behavior, defaults, and failover characteristics. The database may report success while the application is degraded.
+The source RCA reviewed lower-environment issues during a managed MySQL-compatible database upgrade and challenged the choice of an in-place upgrade when blue/green or snapshot-restore approaches were available. Application packages had changed around the same period, making infrastructure and application changes harder to isolate. The database upgrade exposed parameter compatibility concerns, including time-zone and case-sensitivity settings.
 
-## Change approach
-1. Review release notes, supported paths, deprecated settings, and extension compatibility.
-2. Restore a recent backup to a representative test environment; run schema and application checks.
-3. Capture baselines for latency, errors, connections, replication, and backups.
-4. Define sequence, communication, abort criteria, and recovery options.
-5. Upgrade in a controlled window and validate database and application behavior together.
-6. Continue enhanced monitoring through an observation period.
+## Decision framework
 
-## RCA structure
-Document impact in generic terms, a milestone timeline, triggering and contributing conditions, mitigation, and prevention actions in tests, alerting, automation, or runbooks.
+1. **Prefer an isolated target** when application compatibility and rollback risk justify it. Blue/green creates a candidate environment for validation before switchover; snapshot restore is useful when a controlled clone and recovery point are the main needs.
+2. **Use in-place only with a documented reason**, supported engine path, tested backup/restore, planned downtime, and explicit rollback constraints. A database major-version upgrade may not have a true in-place rollback.
+3. **Separate variables:** hold application packages and database configuration steady where possible, or record each independently so failures are attributable.
+4. **Validate parameters and schema:** compare parameter groups, extensions, collation/case behavior, time zone, SQL modes, connection limits, and query plans.
 
-## Verification and learning
-Confirm transactions, connection pools, backups, replication, failover, and dashboards. Track actions to completion and test recovery. Internal incident IDs, database names, account details, and unapproved impact figures are omitted.
+## Pre-change checklist
+
+- Confirm engine and target compatibility, deprecated parameters, and replication/failover behavior.
+- Restore a representative backup and run application smoke, migration, and read/write tests.
+- Capture database latency, connection usage, replication lag, error rates, and backup status.
+- Coordinate application teams on package freeze, migration order, test data, and sign-off criteria.
+- Define a go/no-go checkpoint, monitoring owner, customer communication, and recovery decision tree.
+
+## Incident review structure
+
+Document impact in service terms, timeline, detection, change sequence, technical trigger, contributing factors, mitigation, recovery, and corrective actions. Separate human decisions from system conditions. Actions should improve preflight compatibility checks, parameter-group diffs, release coordination, test coverage, and observability.
+
+## Lessons retained
+
+- Obtain application-team sanity checks before and after the database change.
+- Prefer a reversible deployment pattern where supported and validate its cutover mechanics in advance.
+- Review parameter-group deltas explicitly; do not assume the target inherits compatible settings.
+- Treat pre-production upgrade behavior as a signal requiring remediation before production, not as a rehearsal checkbox.
+
+The public version removes database names, account/service identifiers, internal incident links, and unapproved impact figures.

@@ -1,0 +1,72 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyComputeCreationWithoutName",
+      "Effect": "Deny",
+      "Action": ["ec2:RunInstances"],
+      "Resource": [
+        "arn:aws:ec2:*:*:instance/*",
+        "arn:aws:ec2:*:*:volume/*",
+        "arn:aws:ec2:*:*:network-interface/*"
+      ],
+      "Condition": {"Null": {"aws:RequestTag/Name": "true"}}
+    },
+    {
+      "Sid": "DenyComputeCreationWithoutProduct",
+      "Effect": "Deny",
+      "Action": ["ec2:RunInstances"],
+      "Resource": ["arn:aws:ec2:*:*:instance/*", "arn:aws:ec2:*:*:volume/*", "arn:aws:ec2:*:*:network-interface/*"],
+      "Condition": {"Null": {"aws:RequestTag/Product": "true"}}
+    },
+    {
+      "Sid": "DenyComputeCreationWithoutEnvironment",
+      "Effect": "Deny",
+      "Action": ["ec2:RunInstances"],
+      "Resource": ["arn:aws:ec2:*:*:instance/*", "arn:aws:ec2:*:*:volume/*", "arn:aws:ec2:*:*:network-interface/*"],
+      "Condition": {"Null": {"aws:RequestTag/Environment": "true"}}
+    },
+    {
+      "Sid": "DenyComputeCreationWithoutComponent",
+      "Effect": "Deny",
+      "Action": ["ec2:RunInstances"],
+      "Resource": ["arn:aws:ec2:*:*:instance/*", "arn:aws:ec2:*:*:volume/*", "arn:aws:ec2:*:*:network-interface/*"],
+      "Condition": {"Null": {"aws:RequestTag/Component": "true"}}
+    },
+    {
+      "Sid": "DenyComputeCreationWithoutOwner",
+      "Effect": "Deny",
+      "Action": ["ec2:RunInstances"],
+      "Resource": ["arn:aws:ec2:*:*:instance/*", "arn:aws:ec2:*:*:volume/*", "arn:aws:ec2:*:*:network-interface/*"],
+      "Condition": {"Null": {"aws:RequestTag/Owner": "true"}}
+    },
+    {
+      "Sid": "DenyBucketCreationWithoutName",
+      "Effect": "Deny",
+      "Action": ["s3:CreateBucket"],
+      "Resource": "*",
+      "Condition": {"Null": {"aws:RequestTag/Name": "true"}}
+    },
+    {
+      "Sid": "DenyBucketCreationWithoutProduct",
+      "Effect": "Deny",
+      "Action": ["s3:CreateBucket"],
+      "Resource": "*",
+      "Condition": {"Null": {"aws:RequestTag/Product": "true"}}
+    },
+    {
+      "Sid": "DenyBucketCreationWithoutEnvironment",
+      "Effect": "Deny",
+      "Action": ["s3:CreateBucket"],
+      "Resource": "*",
+      "Condition": {"Null": {"aws:RequestTag/Environment": "true"}}
+    },
+    {
+      "Sid": "DenyBucketCreationWithoutOwner",
+      "Effect": "Deny",
+      "Action": ["s3:CreateBucket"],
+      "Resource": "*",
+      "Condition": {"Null": {"aws:RequestTag/Owner": "true"}}
+    }
+  ]
+}

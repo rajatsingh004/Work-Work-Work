@@ -1,0 +1,3 @@
+# Add security group IDs from the account you are authorized to inventory.
+sg-0123456789abcdef0
+sg-0abcdef0123456789

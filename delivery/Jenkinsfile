@@ -1,0 +1,112 @@
+pipeline {
+  agent { label 'linux' }
+
+  options {
+    timestamps()
+    ansiColor('xterm')
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    disableConcurrentBuilds()
+    timeout(time: 45, unit: 'MINUTES')
+  }
+
+  parameters {
+    string(name: 'SOURCE_REF', defaultValue: 'main', description: 'Branch or release tag')
+    choice(name: 'TARGET_ENV', choices: ['dev', 'staging', 'production'], description: 'Deployment target')
+    booleanParam(name: 'RUN_UNIT_TESTS', defaultValue: true, description: 'Run application unit tests')
+    booleanParam(name: 'RUN_SONAR', defaultValue: true, description: 'Run SonarQube quality analysis')
+    booleanParam(name: 'RUN_CHECKMARX', defaultValue: true, description: 'Run Checkmarx SAST')
+    choice(name: 'DEPLOYMENT_CONFIG', choices: ['CodeDeployDefault.OneAtATime', 'CodeDeployDefault.HalfAtATime', 'CodeDeployDefault.AllAtOnce'], description: 'EC2 deployment batch policy; blue/green mode is configured on the CodeDeploy deployment group')
+  }
+
+  environment {
+    AWS_DEFAULT_REGION = 'us-east-1'
+    ARTIFACT_BUCKET = 'demo-artifacts-example'
+    CODEDEPLOY_APPLICATION = 'demo-application'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        cleanWs()
+        checkout([$class: 'GitSCM', branches: [[name: "${params.SOURCE_REF}"]],
+          userRemoteConfigs: [[url: 'https://git.example.com/platform/demo-service.git', credentialsId: 'scm-readonly']]])
+      }
+    }
+    stage('Build') { steps { sh 'make build' } }
+    stage('Unit tests') {
+      when { expression { params.RUN_UNIT_TESTS } }
+      steps { sh 'make test' }
+    }
+    stage('SonarQube') {
+      when { expression { params.RUN_SONAR } }
+      steps {
+        withSonarQubeEnv('sonarqube') { sh 'make sonar' }
+        timeout(time: 10, unit: 'MINUTES') { waitForQualityGate abortPipeline: true }
+      }
+    }
+    stage('Checkmarx SAST') {
+      when { expression { params.RUN_CHECKMARX } }
+      steps {
+        withCredentials([string(credentialsId: 'checkmarx-api-token', variable: 'CHECKMARX_TOKEN')]) {
+          sh(label: 'Run SAST scan', script: './ci/checkmarx-scan.sh')
+        }
+      }
+    }
+    stage('Publish artifact') {
+      steps {
+        sh 'make package'
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'demo-aws-deploy-role']]) {
+          sh 'aws s3 cp build/application.zip "s3://${ARTIFACT_BUCKET}/${JOB_NAME}/${BUILD_NUMBER}/application.zip"'
+        }
+      }
+    }
+    stage('Production approval') {
+      when { expression { params.TARGET_ENV == 'production' } }
+      steps { input message: 'Approve the reviewed production deployment?', ok: 'Deploy' }
+    }
+    stage('Deploy with CodeDeploy') {
+      steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'demo-aws-deploy-role']]) {
+          sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            case "$TARGET_ENV" in
+              dev)        deployment_group="${CODEDEPLOY_APPLICATION}-dev" ;;
+              staging)    deployment_group="${CODEDEPLOY_APPLICATION}-staging" ;;
+              production) deployment_group="${CODEDEPLOY_APPLICATION}-production" ;;
+              *) echo "Unsupported target environment" >&2; exit 2 ;;
+            esac
+            deployment_id=$(aws deploy create-deployment \
+              --application-name "$CODEDEPLOY_APPLICATION" \
+              --deployment-group-name "$deployment_group" \
+              --deployment-config-name "$DEPLOYMENT_CONFIG" \
+              --s3-location "bucket=$ARTIFACT_BUCKET,key=$JOB_NAME/$BUILD_NUMBER/application.zip,bundleType=zip" \
+              --description "${TARGET_ENV} build ${BUILD_NUMBER}" \
+              --query deploymentId --output text)
+            aws deploy wait deployment-successful --deployment-id "$deployment_id"
+            echo "CodeDeploy completed: $deployment_id"
+          '''
+        }
+      }
+    }
+    stage('Post-deployment verification') {
+      steps {
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          case "$TARGET_ENV" in
+            dev)        healthcheck_url="https://dev.app.example.com/health" ;;
+            staging)    healthcheck_url="https://staging.app.example.com/health" ;;
+            production) healthcheck_url="https://app.example.com/health" ;;
+            *) echo "Unsupported target environment" >&2; exit 2 ;;
+          esac
+          curl --fail --silent --show-error --retry 10 --retry-delay 5 "$healthcheck_url"
+        '''
+      }
+    }
+  }
+
+  post {
+    always { archiveArtifacts artifacts: 'build/**', allowEmptyArchive: true }
+    success { echo "${params.TARGET_ENV} deployment and health check succeeded." }
+    failure { echo 'Pipeline failed; inspect stage logs and CodeDeploy events before retrying.' }
+  }
+}
